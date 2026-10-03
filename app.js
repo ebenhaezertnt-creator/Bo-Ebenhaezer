@@ -21,7 +21,7 @@ async function initAuth(){
    try{
     const d=await api(s.hasAdmin?"/api/login":"/api/setup",{method:"POST",body:s.hasAdmin?{username:"Gmih",password:p}:{password:p}});
     adminToken=d.token;localStorage.setItem("eb_bo_token",adminToken);
-    gate.style.display="none";shell.style.display="flex";await hydrateRemote();initAuth();
+    gate.style.display="none";shell.style.display="flex";await hydrateRemote();show("dashboard");
    }catch(e){msg.textContent=e.message}
   };
   if(adminToken){try{await api("/api/schedules");gate.style.display="none";shell.style.display="flex";await hydrateRemote();show("dashboard");return}catch(e){localStorage.removeItem("eb_bo_token");adminToken=""}}
@@ -103,3 +103,4 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function escAttr(v){return esc(v).replace(/"/g,"&quot;")}
 nav.innerHTML=items.map((x,i)=>'<button class="navitem '+(i===0?"active":"")+'" data-id="'+x[0]+'">'+x[1]+'</button>').join("");
 nav.querySelectorAll("button").forEach(b=>b.onclick=()=>show(b.dataset.id));show("dashboard");
+initAuth();
