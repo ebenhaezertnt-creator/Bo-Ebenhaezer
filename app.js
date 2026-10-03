@@ -12,8 +12,9 @@ async function initAuth(){
  const gate=document.getElementById("authGate"),shell=document.getElementById("appShell"),note=document.getElementById("authNote"),msg=document.getElementById("authMsg"),p2=document.getElementById("adminPassword2");
  try{
   const s=await (await fetch(API_BASE+"/api/status")).json();
-  note.innerHTML=s.hasAdmin?"Masuk dengan akun admin <b>Gmih</b>.":"Pertama kali: buat password admin <b>Gmih</b>.";
+  note.innerHTML=s.hasAdmin?"Akun admin <b>Gmih</b> sudah aktif. Masukkan password admin.":"Akun admin <b>Gmih</b> belum dibuat. Buat password admin pertama kali.";
   if(!s.hasAdmin)p2.style.display="block";
+  document.getElementById("adminLogin").textContent=s.hasAdmin?"Masuk Admin":"Buat & Masuk Admin";
   document.getElementById("adminLogin").onclick=async()=>{
    const p=document.getElementById("adminPassword").value;
    if(p.length<8){msg.textContent="Password minimal 8 karakter.";return}
