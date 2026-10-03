@@ -31,12 +31,7 @@ async function login(){
    if(r.error){
      const e=(r.error.message||"").toLowerCase();
      if(e.includes("invalid login credentials")||e.includes("invalid credentials")){
-       const chk=await sb.from("admin_users").select("user_id").limit(1);
-       if(chk.error){
-         msg("Login gagal. Sistem belum dapat memeriksa data admin. Coba lagi beberapa saat.");
-       }else{
-         msg("Login gagal. Periksa password Anda. Jika ini pertama kali masuk, akun admin Gmih harus dibuat terlebih dahulu di Supabase.");
-       }
+       msg("Login gagal. Password Gmih tidak cocok atau akun admin Gmih belum dibuat di Supabase. Tidak perlu pemeriksaan data admin untuk pesan ini.");
      }else if(e.includes("email not confirmed")){
        msg("Email akun admin belum dikonfirmasi. Konfirmasikan akun di Supabase, lalu coba masuk lagi.");
      }else if(e.includes("too many requests")){
@@ -71,7 +66,7 @@ async function init(){
  $("adminPassword").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
  const {data:{session}}=await sb.auth.getSession();
  if(session&&await isAdmin()){$("authGate").style.display="none";$("appShell").style.display="flex";show("dashboard");}
- else {$("authNote").innerHTML="Login admin <b>Gmih</b>. Jika ini pertama kali, password minimal 8 karakter akan membuat akun admin."; $("adminLogin").textContent="Masuk / Buat Admin"}
+ else {$("authNote").innerHTML="Login admin <b>Gmih</b>. Gunakan password akun admin yang sudah dibuat di Supabase."; $("adminLogin").textContent="Masuk Admin"}
 }
 async function rows(table,order="sort_order"){let q=sb.from(table).select("*");if(order)q=q.order(order,{ascending:true});const {data,error}=await q;if(error)throw error;return data||[]}
 async function saveRow(table,id,obj){let r=id?await sb.from(table).update(obj).eq("id",id):await sb.from(table).insert(obj);if(r.error)throw r.error}
