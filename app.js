@@ -8,26 +8,55 @@ async function api(path,opts={}){
   if(!r.ok)throw new Error(d.error||"Backend gagal");
   return d;
 }
-async function initAuth(){
- const gate=document.getElementById("authGate"),shell=document.getElementById("appShell"),note=document.getElementById("authNote"),msg=document.getElementById("authMsg"),p2=document.getElementById("adminPassword2");
+let authBusy=false;
+async function doLogin(){
+ if(authBusy)return;
+ const gate=document.getElementById("authGate"),shell=document.getElementById("appShell"),note=document.getElementById("authNote"),msg=document.getElementById("authMsg"),btn=document.getElementById("adminLogin"),p=document.getElementById("adminPassword"),p2=document.getElementById("adminPassword2");
+ const hasAdmin=btn.dataset.hasAdmin==="1";
+ const password=p.value;
+ msg.textContent="";
+ if(password.length<8){msg.textContent="Password minimal 8 karakter.";p.focus();return}
+ if(!hasAdmin&&password!==p2.value){msg.textContent="Password tidak sama.";p2.focus();return}
+ authBusy=true;btn.disabled=true;btn.textContent="Memproses…";
  try{
-  const s=await (await fetch(API_BASE+"/api/status")).json();
-  note.innerHTML=s.hasAdmin?"Akun admin <b>Gmih</b> sudah aktif. Masukkan password admin.":"Akun admin <b>Gmih</b> belum dibuat. Buat password admin pertama kali.";
-  if(!s.hasAdmin)p2.style.display="block";
-  document.getElementById("adminLogin").textContent=s.hasAdmin?"Masuk Admin":"Buat & Masuk Admin";
-  document.getElementById("adminLogin").onclick=async()=>{
-   const p=document.getElementById("adminPassword").value;
-   if(p.length<8){msg.textContent="Password minimal 8 karakter.";return}
-   if(!s.hasAdmin&&p!==p2.value){msg.textContent="Password tidak sama.";return}
-   try{
-    const d=await api(s.hasAdmin?"/api/login":"/api/setup",{method:"POST",body:s.hasAdmin?{username:"Gmih",password:p}:{password:p}});
-    adminToken=d.token;localStorage.setItem("eb_bo_token",adminToken);
-    gate.style.display="none";shell.style.display="flex";await hydrateRemote();show("dashboard");
-   }catch(e){msg.textContent=e.message}
-  };
-  if(adminToken){try{await api("/api/schedules");gate.style.display="none";shell.style.display="flex";await hydrateRemote();show("dashboard");return}catch(e){localStorage.removeItem("eb_bo_token");adminToken=""}}
- }catch(e){note.textContent="Backend belum dapat dihubungi.";msg.textContent=e.message}
+  const d=await api(hasAdmin?"/api/login":"/api/setup",{method:"POST",body:hasAdmin?{username:"Gmih",password}:{password}});
+  adminToken=d.token;localStorage.setItem("eb_bo_token",adminToken);
+  gate.style.display="none";shell.style.display="flex";await hydrateRemote();show("dashboard");
+ }catch(e){msg.textContent=e.message||"Gagal masuk.";btn.disabled=false;btn.textContent=hasAdmin?"Masuk Admin":"Buat & Masuk Admin";authBusy=false}
 }
+function bindLogin(){
+ const btn=document.getElementById("adminLogin");
+ btn.type="button";
+ btn.onclick=doLogin;
+ document.getElementById("adminPassword").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+ document.getElementById("adminPassword2").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+}
+async function initAuth(){
+ const gate=document.getElementById("authGate"),shell=document.getElementById("appShell"),note=document.getElementById("authNote"),btn=document.getElementById("adminLogin");
+ bindLogin();
+ btn.disabled=true;
+ try{
+  const r=await fetch(API_BASE+"/api/status",{cache:"no-store"});
+  const s=await r.json();
+  const hasAdmin=!!s.hasAdmin;
+  btn.dataset.hasAdmin=hasAdmin?"1":"0";
+  note.innerHTML=hasAdmin?"Akun admin <b>Gmih</b> sudah aktif. Masukkan password admin.":"Akun admin <b>Gmih</b> belum dibuat. Buat password admin pertama kali.";
+  document.getElementById("adminPassword2").style.display=hasAdmin?"none":"block";
+  btn.textContent=hasAdmin?"Masuk Admin":"Buat & Masuk Admin";
+  btn.disabled=false;
+  if(adminToken){
+   try{await api("/api/schedules");gate.style.display="none";shell.style.display="flex";await hydrateRemote();show("dashboard");return}
+   catch(e){localStorage.removeItem("eb_bo_token");adminToken=""}
+  }
+ }catch(e){
+  note.textContent="Backend belum dapat dihubungi.";
+  document.getElementById("authMsg").textContent="Coba muat ulang halaman. Jika tetap gagal, backend sedang tidak merespons.";
+  btn.textContent="Coba Lagi";
+  btn.disabled=false;
+  btn.dataset.hasAdmin="0";
+ }
+}
+
 async function hydrateRemote(){
  try{const d=await api("/api/schedules");if(d.items?.length){schedules=d.items.map(x=>({id:x.id,name:x.name,day:x.day||"",time:x.time||"",note:x.description||"",active:!!x.active}));save("ebenhaezer_schedules",schedules)}}catch(e){}
  try{const d=await api("/api/banners");if(d.items?.length)save("ebenhaezer_banners",d.items.map(x=>({...x,active:!!x.active})))}catch(e){}
