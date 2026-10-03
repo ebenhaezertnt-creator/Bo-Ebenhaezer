@@ -23,7 +23,34 @@ function schedule(){content.innerHTML='<div class="card"><div class="section-hea
 function scheduleForm(i){const s=i>=0?schedules[i]:{name:"",day:"",time:"",note:"",active:true};content.innerHTML='<div class="card form"><h3>'+(i>=0?"Edit":"Tambah")+' Jadwal Ibadah</h3><label>Nama ibadah<input id="sName" value="'+escAttr(s.name)+'"></label><label>Hari<input id="sDay" value="'+escAttr(s.day)+'"></label><label>Jam ibadah<input id="sTime" value="'+escAttr(s.time)+'" placeholder="09:00"></label><label>Keterangan<input id="sNote" value="'+escAttr(s.note)+'"></label><label class="check"><input id="sActive" type="checkbox" '+(s.active?"checked":"")+'> Aktif</label><div class="actions"><button class="primary" onclick="saveSchedule('+i+')">Simpan</button><button onclick="schedule()">Batal</button></div></div>'}
 function saveSchedule(i){const x={id:i>=0?schedules[i].id:Date.now(),name:sName.value.trim(),day:sDay.value.trim(),time:sTime.value.trim(),note:sNote.value.trim(),active:sActive.checked};if(!x.name||!x.day){alert("Nama dan hari wajib diisi.");return}if(i>=0)schedules[i]=x;else schedules.push(x);save("ebenhaezer_schedules",schedules);schedule()}
 function deleteSchedule(i){if(confirm("Hapus jadwal ini?")){schedules.splice(i,1);save("ebenhaezer_schedules",schedules);schedule()}}
-function photos(){const a=load("ebenhaezer_photos",[]);content.innerHTML='<div class="card"><div class="section-head"><div><h3>Dokumentasi Foto / Arsip Foto Jemaat</h3><p class="muted">Kelola judul, kategori, status dan urutan arsip.</p></div><button class="primary" onclick="photoForm(-1)">+ Tambah Foto</button></div><div class="list">'+(a.length?a.map((p,i)=>'<div class="row"><div><strong>'+esc(p.title)+'</strong><br><span>'+esc(p.category||"Jemaat")+'</span></div><span class="status '+(p.active?"on":"off")+'">'+(p.active?"Aktif":"Nonaktif")+'</span><button onclick="photoForm('+i+')">Edit</button><button class="danger" onclick="deletePhoto('+i+')">Hapus</button></div>').join(""):'<p class="muted">Belum ada arsip foto.</p>')+'</div></div>'}
+async function syncRemotePhotos(){
+  try{
+    const r=await fetch("https://ebenhaezer-media.ebenhaezertnt.workers.dev/photos");
+    if(!r.ok)return null;
+    const data=await r.json();
+    const list=Array.isArray(data)?data:(data.photos||[]);
+    if(!list.length)return null;
+    const normalized=list.map((p,i)=>({id:p.id??Date.now()+i,title:p.title||"Dokumentasi Jemaat",category:p.category||"Jemaat",src:p.src||"",active:p.active!==false,sort_order:p.sort_order??i}));
+    save("ebenhaezer_photos",normalized);
+    return normalized;
+  }catch(e){return null}
+}
+async function photos(){
+  const a=load("ebenhaezer_photos",[]);
+  content.innerHTML='<div class="card"><div class="section-head"><div><h3>Dokumentasi Foto / Arsip Foto Jemaat</h3><p class="muted">Arsip foto lokal dan sinkronisasi media gereja.</p></div><div><button class="primary" onclick="photoForm(-1)">+ Tambah Foto</button> <button onclick="refreshPhotos()">↻ Sinkronkan</button></div></div><div id="photoList"></div></div>';
+  renderPhotos(a);
+  await refreshPhotos(false);
+}
+function renderPhotos(a){
+  const box=document.getElementById("photoList");
+  if(!box)return;
+  box.innerHTML=a.length?'<div class="list">'+a.map((p,i)=>'<div class="row"><div><strong>'+esc(p.title)+'</strong><br><span>'+esc(p.category||"Jemaat")+'</span></div><span class="status '+(p.active?"on":"off")+'">'+(p.active?"Aktif":"Nonaktif")+'</span><button onclick="photoForm('+i+')">Edit</button><button class="danger" onclick="deletePhoto('+i+')">Hapus</button></div>').join("")+'</div>':'<p class="muted">Belum ada arsip foto.</p>';
+}
+async function refreshPhotos(showMessage=true){
+  const remote=await syncRemotePhotos();
+  if(remote){renderPhotos(remote);if(showMessage)alert("Arsip foto berhasil disinkronkan dari media gereja.")}
+  else if(showMessage)alert("Media backend belum dapat dihubungi. Data lokal tetap digunakan.");
+}
 function photoForm(i){const a=load("ebenhaezer_photos",[]),p=i>=0?a[i]:{title:"",category:"Jemaat",active:true,src:""};content.innerHTML='<div class="card form"><h3>'+(i>=0?"Edit":"Tambah")+' Foto</h3><label>Judul<input id="pTitle" value="'+escAttr(p.title)+'"></label><label>Kategori<input id="pCat" value="'+escAttr(p.category||"Jemaat")+'"></label><label>URL gambar<input id="pSrc" value="'+escAttr(p.src||"")+'" placeholder="https://..."></label><label class="check"><input id="pActive" type="checkbox" '+(p.active?"checked":"")+'> Tampilkan</label><div class="actions"><button class="primary" onclick="savePhoto('+i+')">Simpan</button><button onclick="photos()">Batal</button></div></div>'}
 function savePhoto(i){const a=load("ebenhaezer_photos",[]),x={id:i>=0?a[i].id:Date.now(),title:pTitle.value.trim(),category:pCat.value.trim()||"Jemaat",src:pSrc.value.trim(),active:pActive.checked};if(!x.title){alert("Judul wajib diisi.");return}if(i>=0)a[i]=x;else a.push(x);save("ebenhaezer_photos",a);photos()}
 function deletePhoto(i){const a=load("ebenhaezer_photos",[]);if(confirm("Hapus foto ini?")){a.splice(i,1);save("ebenhaezer_photos",a);photos()}}
