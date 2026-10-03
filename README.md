@@ -2,7 +2,7 @@
 
 Repository untuk Back Office GMIH Ebenhaezer Ternate.
 
-Fitur yang akan dimigrasikan:
+Fitur:
 - Dashboard
 - Profil Gereja
 - Kelola Layout
@@ -14,4 +14,4 @@ Fitur yang akan dimigrasikan:
 - Kontak & Header
 - Pengaturan
 
-Sumber aplikasi sebelumnya: Floot.
+Aplikasi menggunakan GitHub Pages untuk antarmuka dan Supabase untuk autentikasi serta data Back Office.
