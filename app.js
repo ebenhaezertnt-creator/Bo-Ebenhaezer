@@ -21,23 +21,50 @@ const msg=t=>{const e=$("authMsg");if(e)e.textContent=t||""};
 async function isAdmin(){const {data:{user}}=await sb.auth.getUser();if(!user)return false;const {data}=await sb.from("admin_users").select("user_id,role,display_name").eq("user_id",user.id).maybeSingle();return !!data}
 async function login(){
  const u=$("adminUser").value.trim(),p=$("adminPassword").value;
- if(u!=="Gmih")return msg("User harus Gmih.");
+ msg("");
+ if(u!=="Gmih")return msg("Nama pengguna tidak benar. Gunakan: Gmih");
+ if(!p)return msg("Masukkan password Back Office.");
  if(p.length<8)return msg("Password minimal 8 karakter.");
- $("adminLogin").disabled=true;$("adminLogin").textContent="Memproses…";
- let r=await sb.auth.signInWithPassword({email:ADMIN_EMAIL,password:p});
- let first=false;
- if(r.error){
-   const s=await sb.auth.signUp({email:ADMIN_EMAIL,password:p});
-   if(!s.error){r=s;first=true}else{msg(r.error.message);$("adminLogin").disabled=false;$("adminLogin").textContent="Masuk Admin";return}
+ $("adminLogin").disabled=true;$("adminLogin").textContent="Memeriksa…";
+ try{
+   const r=await sb.auth.signInWithPassword({email:ADMIN_EMAIL,password:p});
+   if(r.error){
+     const e=(r.error.message||"").toLowerCase();
+     if(e.includes("invalid login credentials")||e.includes("invalid credentials")){
+       const chk=await sb.from("admin_users").select("user_id").limit(1);
+       if(chk.error){
+         msg("Login gagal. Sistem belum dapat memeriksa data admin. Coba lagi beberapa saat.");
+       }else{
+         msg("Login gagal. Periksa password Anda. Jika ini pertama kali masuk, akun admin Gmih harus dibuat terlebih dahulu di Supabase.");
+       }
+     }else if(e.includes("email not confirmed")){
+       msg("Email akun admin belum dikonfirmasi. Konfirmasikan akun di Supabase, lalu coba masuk lagi.");
+     }else if(e.includes("too many requests")){
+       msg("Terlalu banyak percobaan login. Tunggu beberapa menit lalu coba lagi.");
+     }else if(e.includes("network")||e.includes("fetch")){
+       msg("Koneksi ke server login bermasalah. Periksa internet lalu coba lagi.");
+     }else{
+       msg("Login tidak dapat dilakukan: "+r.error.message);
+     }
+     return;
+   }
+   if(!r.data?.user){
+     msg("Login belum menghasilkan sesi admin. Silakan coba lagi.");
+     return;
+   }
+   const ok=await isAdmin();
+   if(!ok){
+     await sb.auth.signOut();
+     msg("Akun berhasil masuk, tetapi belum terdaftar sebagai admin Back Office. Tambahkan akun ini ke daftar admin Supabase.");
+     return;
+   }
+   $("authGate").style.display="none";$("appShell").style.display="flex";show("dashboard");
+ }catch(e){
+   msg("Terjadi masalah saat login. Periksa koneksi internet dan coba lagi.");
+ }finally{
+   $("adminLogin").disabled=false;
+   $("adminLogin").textContent="Masuk Admin";
  }
- if(r.error||!r.data.user){msg(r.error?.message||"Akun belum selesai dibuat.");$("adminLogin").disabled=false;return}
- if(first){
-   const ins=await sb.from("admin_users").insert({user_id:r.data.user.id,display_name:"Admin GMIH",role:"admin"});
-   if(ins.error&&!/duplicate/i.test(ins.error.message)){msg(ins.error.message);return}
- }
- const ok=await isAdmin();
- if(!ok){msg("Akun dibuat, tetapi sesi belum aktif. Jika konfirmasi email aktif, konfirmasi email lalu masuk lagi.");return}
- $("authGate").style.display="none";$("appShell").style.display="flex";show("dashboard");
 }
 async function init(){
  $("adminLogin").onclick=login;
