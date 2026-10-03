@@ -23,23 +23,28 @@ async function login(){
  const u=$("adminUser").value.trim(),p=$("adminPassword").value;
  if(u!=="Gmih")return msg("User harus Gmih.");
  if(p.length<8)return msg("Password minimal 8 karakter.");
- const has=await hasAnyAdmin();
- $("adminLogin").disabled=true;$("adminLogin").textContent=has?"Masuk…":"Membuat admin…";
- let r=has?await sb.auth.signInWithPassword({email:ADMIN_EMAIL,password:p}):await sb.auth.signUp({email:ADMIN_EMAIL,password:p});
- if(r.error){msg(r.error.message);$("adminLogin").disabled=false;$("adminLogin").textContent=has?"Masuk Admin":"Buat & Masuk Admin";return}
- if(!r.data.user){msg("Akun belum selesai dibuat.");return}
- if(!has){const ins=await sb.from("admin_users").insert({user_id:r.data.user.id,display_name:"Admin GMIH",role:"admin"});if(ins.error&&!/duplicate/i.test(ins.error.message)){msg(ins.error.message);return}}
+ $("adminLogin").disabled=true;$("adminLogin").textContent="Memproses…";
+ let r=await sb.auth.signInWithPassword({email:ADMIN_EMAIL,password:p});
+ let first=false;
+ if(r.error){
+   const s=await sb.auth.signUp({email:ADMIN_EMAIL,password:p});
+   if(!s.error){r=s;first=true}else{msg(r.error.message);$("adminLogin").disabled=false;$("adminLogin").textContent="Masuk Admin";return}
+ }
+ if(r.error||!r.data.user){msg(r.error?.message||"Akun belum selesai dibuat.");$("adminLogin").disabled=false;return}
+ if(first){
+   const ins=await sb.from("admin_users").insert({user_id:r.data.user.id,display_name:"Admin GMIH",role:"admin"});
+   if(ins.error&&!/duplicate/i.test(ins.error.message)){msg(ins.error.message);return}
+ }
  const ok=await isAdmin();
- if(!ok){msg("Login berhasil, tetapi akun belum mendapat akses admin. Jika konfirmasi email aktif, selesaikan konfirmasi lalu masuk lagi.");return}
+ if(!ok){msg("Akun dibuat, tetapi sesi belum aktif. Jika konfirmasi email aktif, konfirmasi email lalu masuk lagi.");return}
  $("authGate").style.display="none";$("appShell").style.display="flex";show("dashboard");
 }
-async function hasAnyAdmin(){const {count}=await sb.from("admin_users").select("user_id",{count:"exact",head:true});return (count||0)>0}
 async function init(){
  $("adminLogin").onclick=login;
  $("adminPassword").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
  const {data:{session}}=await sb.auth.getSession();
  if(session&&await isAdmin()){$("authGate").style.display="none";$("appShell").style.display="flex";show("dashboard");}
- else {const h=await hasAnyAdmin();$("authNote").innerHTML=h?"Akun admin <b>Gmih</b> sudah aktif. Masukkan password admin.":"Akun admin <b>Gmih</b> belum dibuat. Masukkan password minimal 8 karakter untuk membuat admin pertama."; $("adminLogin").textContent=h?"Masuk Admin":"Buat & Masuk Admin"}
+ else {$("authNote").innerHTML="Login admin <b>Gmih</b>. Jika ini pertama kali, password minimal 8 karakter akan membuat akun admin."; $("adminLogin").textContent="Masuk / Buat Admin"}
 }
 async function rows(table,order="sort_order"){let q=sb.from(table).select("*");if(order)q=q.order(order,{ascending:true});const {data,error}=await q;if(error)throw error;return data||[]}
 async function saveRow(table,id,obj){let r=id?await sb.from(table).update(obj).eq("id",id):await sb.from(table).insert(obj);if(r.error)throw r.error}
