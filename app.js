@@ -236,29 +236,32 @@ async function media(){
    rows("photos")
   ]);
   const staticHtml=a.map(x=>`<div class="media-card">
-   <div class="media-preview"><img src="${esc(x.image_url||x.fallback_data||"")} alt="${esc(x.title)}"></div>
+   <div class="media-preview"><img src="${esc(x.image_url||x.fallback_data||"")}" alt="${esc(x.title)}"></div>
    <div class="media-info"><strong>${esc(x.title)}</strong><textarea id="mediaDesc_${x.id}" rows="3" placeholder="Deskripsi gambar...">${esc(x.description||"")}</textarea><button type="button" onclick="saveMediaDescription(${x.id})">Simpan deskripsi</button></div>
    <input id="mediaFile_${x.id}" type="file" accept="image/*" hidden onchange="replaceMedia(${x.id})">
-   <button class="primary" type="button" onclick="document.getElementById('mediaFile_${x.id}').click()">Ganti</button>
-   ${x.image_url?'<button type="button" onclick="resetMedia('+x.id+')">Kembali bawaan</button>':""}
+   <div class="actions">
+    <button class="primary" type="button" onclick="document.getElementById('mediaFile_${x.id}').click()">Ganti</button>
+    ${x.image_url?'<button type="button" onclick="resetMedia('+x.id+')">Kembali bawaan</button>':""}
+    ${x.image_url?'<button class="danger" type="button" onclick="deleteMediaImage('+x.id+')">Hapus gambar</button>':""}
+   </div>
   </div>`).join("");
   const bannerHtml=b.filter(x=>x.image_url).map(x=>`<div class="media-card">
    <div class="media-preview"><img src="${esc(x.image_url)}" alt="${esc(x.title)}"></div>
    <div class="media-info"><strong>${esc(x.title)}</strong><span>Banner / ${esc(x.kind)}</span></div>
-   <button class="primary" onclick='banForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button>
+   <div class="actions"><button class="primary" onclick='banForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button><button class="danger" onclick="deleteMediaRecord('banners',${x.id})">Hapus gambar</button></div>
   </div>`).join("");
   const minHtml=m.filter(x=>x.photo_url).map(x=>`<div class="media-card">
    <div class="media-preview"><img src="${esc(x.photo_url)}" alt="${esc(x.name)}"></div>
    <div class="media-info"><strong>${esc(x.name)}</strong><span>Foto ministri</span></div>
-   <button class="primary" onclick='minForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button>
+   <div class="actions"><button class="primary" onclick='minForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button><button class="danger" onclick="deleteMediaRecord('ministries',${x.id})">Hapus gambar</button></div>
   </div>`).join("");
   const photoHtml=p.filter(x=>x.image_url).map(x=>`<div class="media-card">
    <div class="media-preview"><img src="${esc(x.image_url)}" alt="${esc(x.title)}"></div>
    <div class="media-info"><strong>${esc(x.title||"Dokumentasi")}</strong><span>${esc(x.category||"Dokumentasi")}</span></div>
-   <button class="primary" onclick='photoForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button>
+   <div class="actions"><button class="primary" onclick='photoForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button><button class="danger" onclick="deleteMediaRecord('photos',${x.id})">Hapus gambar</button></div>
   </div>`).join("");
   shell("Media Website",`<div class="media-page">
-   <div class="card"><div class="section-head"><div><h3>Semua Gambar Website</h3><p class="muted">Semua gambar bawaan website dapat diganti dari sini. Perubahan langsung dipakai website.</p></div></div>
+   <div class="card"><div class="section-head"><div><h3>Semua Gambar Website</h3><p class="muted">Semua gambar website dapat diganti atau dihapus dari sini.</p></div></div>
    <div class="media-grid">${staticHtml}</div></div>
    ${bannerHtml?'<div class="card"><h3>Banner & QRIS Aktif</h3><div class="media-grid">'+bannerHtml+"</div></div>":""}
    ${minHtml?'<div class="card"><h3>Foto Ministri</h3><div class="media-grid">'+minHtml+"</div></div>":""}
@@ -266,6 +269,24 @@ async function media(){
   </div>`);
  }catch(e){shell("Media Website",`<div class="card"><h3>Gagal memuat media</h3><p>${esc(e.message)}</p></div>`)}
 }
+async function deleteMediaImage(id){
+ if(!confirm("Hapus gambar ini dari website? Gambar akan dikembalikan ke bawaan website."))return;
+ try{
+  const r=await sb.from("media_assets").update({image_url:null,updated_at:new Date().toISOString()}).eq("id",id);
+  if(r.error)throw r.error;
+  alert("✓ Gambar berhasil dihapus.");
+  media();
+ }catch(e){alert("Gagal menghapus gambar: "+(e?.message||e))}
+}
+async function deleteMediaRecord(table,id){
+ if(!confirm("Hapus gambar ini? Data gambar juga akan dihapus dari daftar media."))return;
+ try{
+  await delRow(table,id);
+  alert("✓ Gambar berhasil dihapus.");
+  media();
+ }catch(e){alert("Gagal menghapus gambar: "+(e?.message||e))}
+}
+
 async function saveMediaDescription(id){
  try{
   const el=$("mediaDesc_"+id);
