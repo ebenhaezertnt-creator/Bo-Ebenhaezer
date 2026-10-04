@@ -242,7 +242,7 @@ async function media(){
    <div class="actions">
     <button class="primary" type="button" onclick="document.getElementById('mediaFile_${x.id}').click()">Ganti</button>
     ${x.image_url?'<button type="button" onclick="resetMedia('+x.id+')">Kembali bawaan</button>':""}
-    ${x.image_url?'<button class="danger" type="button" onclick="deleteMediaImage('+x.id+')">Hapus gambar</button>':""}
+    <button class="danger" type="button" onclick="deleteMediaImage(${x.id})">Hapus gambar</button>
    </div>
   </div>`).join("");
   const bannerHtml=b.filter(x=>x.image_url).map(x=>`<div class="media-card">
