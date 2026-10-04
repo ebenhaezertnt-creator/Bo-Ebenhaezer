@@ -176,7 +176,7 @@ function collectLayout(){
 async function saveLayout(){
  try{
   const cfg=collectLayout();
-  const r=await sb.from("layout_settings").update({desktop_first:lDesk?.checked??true,show_qris:cfg.sections.find(x=>x.key==="donasi")?.visible!==false,show_memory_verse:cfg.sections.some(x=>x.key==="renungan"&&x.visible!==false),show_devotional:cfg.sections.some(x=>x.key==="renungan"&&x.visible!==false),layout_config:cfg,updated_at:new Date().toISOString()}).eq("id",1);
+  const r=await sb.from("layout_settings").update({desktop_first:true,show_qris:cfg.sections.find(x=>x.key==="donasi")?.visible!==false,show_memory_verse:cfg.sections.some(x=>x.key==="renungan"&&x.visible!==false),show_devotional:cfg.sections.some(x=>x.key==="renungan"&&x.visible!==false),layout_config:cfg,updated_at:new Date().toISOString()}).eq("id",1);
   if(r.error)throw r.error;
   currentLayoutConfig=cfg; alert("✓ Semua pengaturan layout tersimpan dan akan diterapkan di website.");
  }catch(e){alert("Gagal menyimpan layout: "+(e?.message||e))}
