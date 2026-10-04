@@ -4,7 +4,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const ADMIN_EMAIL="gmih@ebenhaezer.local";
 const items=[
  ["dashboard","Dashboard"],["gereja","Profil Gereja"],["layout","Konfigurasi Layout"],
- ["banner","Banner & QRIS"],["jadwal","Jadwal Ibadah"],["ministri","Ministri"],
+ ["banner","Banner & QRIS"],["media","Media Website"],["jadwal","Jadwal Ibadah"],["ministri","Ministri"],
  ["dokumentasi","Dokumentasi Foto"],["arsip","Arsip Foto Jemaat"],["kontak","Kontak & Header"],
  ["harian","Ayat & Renungan"],["pengaturan","Pengaturan"]
 ];
@@ -115,9 +115,72 @@ async function saveContact(id){try{await saveRow("contacts",id,{label:cLabel.val
 async function harian(){const a=await rows("daily_content","content_date");shell("Ayat & Renungan",`<div class="card"><div class="section-head"><h3>Ayat Hafalan & Renungan</h3><button class="primary" onclick="dailyForm()">+ Tambah</button></div><div class="list">${a.map(x=>`<div class="row"><div><strong>${esc(x.kind)} — ${esc(x.content_date)}</strong><br><span>${esc(x.title||"")} • ${esc(x.body).slice(0,100)}</span></div><button onclick='dailyForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Edit</button><button class="danger" onclick="remove('daily_content',${x.id},harian)">Hapus</button></div>`).join("")}</div></div>`)}
 function dailyForm(x=null){x=x||{};shell("Ayat & Renungan",`<div class="card form"><label>Tanggal<input id="dDate" type="date" value="${esc(x.content_date||new Date().toISOString().slice(0,10))}"></label><label>Jenis<select id="dKind"><option value="ayat_hafalan" ${x.kind==="ayat_hafalan"?"selected":""}>Ayat Hafalan</option><option value="renungan" ${x.kind==="renungan"?"selected":""}>Renungan</option></select></label><label>Judul<input id="dTitle" value="${esc(x.title||"")}"></label><label>Isi<textarea id="dBody" rows="10">${esc(x.body||"")}</textarea></label><label>Sumber<input id="dSource" value="${esc(x.source||"")}"></label><label class="check"><input id="dActive" type="checkbox" ${x.active!==false?"checked":""}> Aktif</label><div class="actions"><button class="primary" onclick='saveDaily(${x.id||"null"})'>Simpan</button><button onclick="harian()">Batal</button></div></div>`)}
 async function saveDaily(id){try{await saveRow("daily_content",id,{content_date:dDate.value,kind:dKind.value,title:dTitle.value.trim(),body:dBody.value.trim(),source:dSource.value.trim(),active:dActive.checked});harian()}catch(e){alert(e.message)}}
+
+
+async function media(){
+ try{
+  const [a,b,m,p]=await Promise.all([
+   rows("media_assets","sort_order"),
+   rows("banners"),
+   rows("ministries"),
+   rows("photos")
+  ]);
+  const staticHtml=a.map(x=>`<div class="media-card">
+   <div class="media-preview"><img src="${esc(x.image_url||x.fallback_data||"")} alt="${esc(x.title)}"></div>
+   <div class="media-info"><strong>${esc(x.title)}</strong><span>${esc(x.description||x.slot_key)}</span></div>
+   <input id="mediaFile_${x.id}" type="file" accept="image/*" hidden onchange="replaceMedia(${x.id})">
+   <button class="primary" type="button" onclick="document.getElementById('mediaFile_${x.id}').click()">Ganti</button>
+   ${x.image_url?'<button type="button" onclick="resetMedia('+x.id+')">Kembali bawaan</button>':""}
+  </div>`).join("");
+  const bannerHtml=b.filter(x=>x.image_url).map(x=>`<div class="media-card">
+   <div class="media-preview"><img src="${esc(x.image_url)}" alt="${esc(x.title)}"></div>
+   <div class="media-info"><strong>${esc(x.title)}</strong><span>Banner / ${esc(x.kind)}</span></div>
+   <button class="primary" onclick='banForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button>
+  </div>`).join("");
+  const minHtml=m.filter(x=>x.photo_url).map(x=>`<div class="media-card">
+   <div class="media-preview"><img src="${esc(x.photo_url)}" alt="${esc(x.name)}"></div>
+   <div class="media-info"><strong>${esc(x.name)}</strong><span>Foto ministri</span></div>
+   <button class="primary" onclick='minForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button>
+  </div>`).join("");
+  const photoHtml=p.filter(x=>x.image_url).map(x=>`<div class="media-card">
+   <div class="media-preview"><img src="${esc(x.image_url)}" alt="${esc(x.title)}"></div>
+   <div class="media-info"><strong>${esc(x.title||"Dokumentasi")}</strong><span>${esc(x.category||"Dokumentasi")}</span></div>
+   <button class="primary" onclick='photoForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button>
+  </div>`).join("");
+  shell("Media Website",`<div class="media-page">
+   <div class="card"><div class="section-head"><div><h3>Semua Gambar Website</h3><p class="muted">Semua gambar bawaan website dapat diganti dari sini. Perubahan langsung dipakai website.</p></div></div>
+   <div class="media-grid">${staticHtml}</div></div>
+   ${bannerHtml?'<div class="card"><h3>Banner & QRIS Aktif</h3><div class="media-grid">'+bannerHtml+"</div></div>":""}
+   ${minHtml?'<div class="card"><h3>Foto Ministri</h3><div class="media-grid">'+minHtml+"</div></div>":""}
+   ${photoHtml?'<div class="card"><h3>Dokumentasi Foto</h3><div class="media-grid">'+photoHtml+"</div></div>":""}
+  </div>`);
+ }catch(e){shell("Media Website",`<div class="card"><h3>Gagal memuat media</h3><p>${esc(e.message)}</p></div>`)}
+}
+async function replaceMedia(id){
+ const input=$("mediaFile_"+id),file=input?.files?.[0]; if(!file)return;
+ if(!file.type.startsWith("image/"))return alert("File harus berupa gambar.");
+ if(file.size>8*1024*1024)return alert("Ukuran maksimal 8 MB.");
+ try{
+  const {data:{session}}=await sb.auth.getSession(); if(!session)throw new Error("Sesi admin sudah berakhir.");
+  const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+  const path="media/"+id+"-"+Date.now()+"-"+crypto.randomUUID()+"."+ext;
+  const up=await sb.storage.from("site-media").upload(path,file,{cacheControl:"31536000",upsert:false,contentType:file.type});
+  if(up.error)throw up.error;
+  const url=sb.storage.from("site-media").getPublicUrl(path).data.publicUrl;
+  const r=await sb.from("media_assets").update({image_url:url,updated_at:new Date().toISOString()}).eq("id",id);
+  if(r.error)throw r.error;
+  alert("✓ Gambar berhasil diganti.");
+  media();
+ }catch(e){alert("Gagal mengganti gambar: "+(e?.message||e))}
+}
+async function resetMedia(id){
+ if(!confirm("Kembalikan gambar bawaan website?"))return;
+ try{const r=await sb.from("media_assets").update({image_url:null,updated_at:new Date().toISOString()}).eq("id",id);if(r.error)throw r.error;media()}catch(e){alert(e.message)}
+}
+
 async function remove(table,id,back){if(!confirm("Hapus data ini?"))return;try{await delRow(table,id);back()}catch(e){alert(e.message)}}
 async function pengaturan(){shell("Pengaturan",`<div class="card"><h3>Pengaturan Back Office</h3><p>Backend: Supabase</p><p>Frontend: GitHub Pages</p><button class="danger" onclick="logout()">Keluar</button></div>`)}
 async function logout(){await sb.auth.signOut();location.reload()}
-async function show(id){const it=items.find(x=>x[0]===id);$("pageTitle").textContent=it?.[1]||"Back Office";document.querySelectorAll(".navitem").forEach(b=>b.classList.toggle("active",b.dataset.id===id));try{if(id==="dashboard")await dashboard();else if(id==="gereja")await gereja();else if(id==="layout")await layout();else if(id==="banner")await banner();else if(id==="jadwal")await jadwal();else if(id==="ministri")await ministri();else if(id==="dokumentasi")await photos();else if(id==="arsip")await photos("Jemaat");else if(id==="kontak")await kontak();else if(id==="harian")await harian();else await pengaturan()}catch(e){shell("Error",`<div class="card"><h3>Gagal memuat data</h3><p>${esc(e.message)}</p></div>`)}}
-const navIcons={"dashboard":"⌂","gereja":"◈","layout":"▦","banner":"◉","jadwal":"◷","ministri":"♙","dokumentasi":"▣","arsip":"▤","kontak":"☎","harian":"✦","pengaturan":"⚙"};const nav=$("nav");nav.innerHTML=items.map((x,i)=>`<button class="navitem ${i===0?"active":""}" data-id="${x[0]}"><span class="navicon">${navIcons[x[0]]||"•"}</span><span>${x[1]}</span></button>`).join("");nav.querySelectorAll("button").forEach(b=>b.onclick=()=>show(b.dataset.id));
+async function show(id){const it=items.find(x=>x[0]===id);$("pageTitle").textContent=it?.[1]||"Back Office";document.querySelectorAll(".navitem").forEach(b=>b.classList.toggle("active",b.dataset.id===id));try{if(id==="dashboard")await dashboard();else if(id==="gereja")await gereja();else if(id==="layout")await layout();else if(id==="banner")await banner();else if(id==="media")await media();else if(id==="jadwal")await jadwal();else if(id==="ministri")await ministri();else if(id==="dokumentasi")await photos();else if(id==="arsip")await photos("Jemaat");else if(id==="kontak")await kontak();else if(id==="harian")await harian();else await pengaturan()}catch(e){shell("Error",`<div class="card"><h3>Gagal memuat data</h3><p>${esc(e.message)}</p></div>`)}}
+const navIcons={"dashboard":"⌂","gereja":"◈","layout":"▦","banner":"◉","media":"▧","jadwal":"◷","ministri":"♙","dokumentasi":"▣","arsip":"▤","kontak":"☎","harian":"✦","pengaturan":"⚙"};const nav=$("nav");nav.innerHTML=items.map((x,i)=>`<button class="navitem ${i===0?"active":""}" data-id="${x[0]}"><span class="navicon">${navIcons[x[0]]||"•"}</span><span>${x[1]}</span></button>`).join("");nav.querySelectorAll("button").forEach(b=>b.onclick=()=>show(b.dataset.id));
 init();
