@@ -1,5 +1,5 @@
-const SUPABASE_URL="https://pbwfdstapekaogbljpgz.supabase.co";
-const SUPABASE_KEY="sb_publishable_5zy2difxPe8dAEz7Hnz18Q_uKGw8Lu-";
+const SUPABASE_URL="https://kkisfurtvdmgvzkprznz.supabase.co";
+const SUPABASE_KEY="sb_publishable_SnYsi_QvUWLEWEJx5vEmnQ_cTEK-tSM";
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const ADMIN_EMAIL="gmih@ebenhaezer.local";
 const items=[
