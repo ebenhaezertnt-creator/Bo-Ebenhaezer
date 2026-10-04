@@ -76,8 +76,118 @@ function shell(title,body){$("pageTitle").textContent=title;$("content").innerHT
 async function dashboard(){const [s,m,b,p,c,d]=await Promise.all([rows("worship_schedules"),rows("ministries"),rows("banners"),rows("photos"),rows("contacts"),rows("daily_content","content_date")]);shell("Dashboard",`<div class="cards"><div class="card"><h3>Profil Gereja</h3><p>GMIH Ebenhaezer Ternate</p></div><div class="card"><h3>Jadwal Aktif</h3><p>${s.filter(x=>x.active).length}</p></div><div class="card"><h3>Ministri</h3><p>${m.filter(x=>x.active).length}</p></div><div class="card"><h3>Foto</h3><p>${p.filter(x=>x.active).length}</p></div></div><div class="notice"><strong>Backend Supabase aktif.</strong><br><span class="muted">Website GitHub membaca data gereja dari database ini.</span></div>`)}
 async function gereja(){const x=await settings();shell("Profil Gereja",`<div class="card form"><h3>Profil Gereja</h3><label>Nama Gereja<input id="gName" value="${esc(x.church_name)}"></label><label>Slogan<textarea id="gTag" rows="2">${esc(x.tagline||"")}</textarea></label><label>Alamat<textarea id="gAddr" rows="3">${esc(x.address||"")}</textarea></label><label>Telepon<input id="gPhone" value="${esc(x.phone||"")}"></label><label>Email<input id="gEmail" value="${esc(x.email||"")}"></label><label>Facebook<input id="gFb" value="${esc(x.facebook_url||"")}"></label><label>Instagram<input id="gIg" value="${esc(x.instagram_url||"")}"></label><label>YouTube<input id="gYt" value="${esc(x.youtube_url||"")}"></label><div class="actions"><button class="primary" onclick="saveGereja()">Simpan</button></div></div>`)}
 async function saveGereja(){try{const r=await sb.from("church_settings").update({church_name:gName.value.trim(),tagline:gTag.value.trim(),address:gAddr.value.trim(),phone:gPhone.value.trim(),email:gEmail.value.trim(),facebook_url:gFb.value.trim(),instagram_url:gIg.value.trim(),youtube_url:gYt.value.trim(),updated_at:new Date().toISOString()}).eq("id",1);if(r.error)throw r.error;alert("Profil tersimpan.");gereja()}catch(e){alert(e.message)}}
-async function layout(){const {data}=await sb.from("layout_settings").select("*").eq("id",1).single();shell("Konfigurasi Layout",`<div class="card form"><h3>Pengaturan Tampilan</h3><label class="check"><input id="lDesk" type="checkbox" ${data?.desktop_first?"checked":""}> Prioritas desktop</label><label class="check"><input id="lQris" type="checkbox" ${data?.show_qris?"checked":""}> Tampilkan QRIS</label><label class="check"><input id="lVerse" type="checkbox" ${data?.show_memory_verse?"checked":""}> Tampilkan Ayat Hafalan</label><label class="check"><input id="lDev" type="checkbox" ${data?.show_devotional?"checked":""}> Tampilkan Renungan</label><div class="actions"><button class="primary" onclick="saveLayout()">Simpan</button></div></div>`)}
-async function saveLayout(){const r=await sb.from("layout_settings").update({desktop_first:lDesk.checked,show_qris:lQris.checked,show_memory_verse:lVerse.checked,show_devotional:lDev.checked,updated_at:new Date().toISOString()}).eq("id",1);if(r.error)alert(r.error.message);else alert("Layout tersimpan.")}
+const DEFAULT_LAYOUT={sections:[
+ {key:"hero",label:"Hero / Gedung Gereja",visible:true,order:10},
+ {key:"donasi",label:"Donasi / QRIS",visible:true,order:20},
+ {key:"shortcuts",label:"Menu Pintasan",visible:true,order:30},
+ {key:"tentang",label:"Tentang Jemaat",visible:true,order:40},
+ {key:"pelayanan",label:"Ministri / Pelayanan",visible:true,order:50},
+ {key:"renungan",label:"Renungan",visible:true,order:60},
+ {key:"video",label:"Video",visible:true,order:70},
+ {key:"galeri-foto-kanan",label:"Dokumentasi Foto",visible:true,order:80},
+ {key:"quick",label:"Tautan Cepat",visible:true,order:90},
+ {key:"jadwal-ibadah",label:"Jadwal Ibadah",visible:true,order:100},
+ {key:"renungan-visual",label:"Galeri Rohani",visible:true,order:110},
+ {key:"scenic",label:"Banner Pemandangan",visible:true,order:120}
+],desktop:{containerWidth:1500,contentColumns:2,sidebarWidth:320,gap:24,sectionGap:20},mobile:{containerPadding:16,gap:14},style:{cardRadius:18,heroHeight:560,galleryColumns:4,imageRatio:"16/10"}};
+
+function normalizeLayoutConfig(raw){
+ const base=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+ const cfg=raw&&typeof raw==="object"?raw:{};
+ cfg.sections=Array.isArray(cfg.sections)&&cfg.sections.length?cfg.sections:base.sections;
+ cfg.desktop={...base.desktop,...(cfg.desktop||{})};
+ cfg.mobile={...base.mobile,...(cfg.mobile||{})};
+ cfg.style={...base.style,...(cfg.style||{})};
+ return cfg;
+}
+function layoutSectionRows(cfg){
+ const all=[...cfg.sections].sort((a,b)=>(a.order||0)-(b.order||0));
+ return all.map((x,i)=>`<div class="layout-row" data-key="${esc(x.key)}">
+  <div class="layout-drag">☰</div>
+  <div class="layout-name"><b>${esc(x.label)}</b><small>${esc(x.key)}</small></div>
+  <button type="button" onclick="moveLayout('${esc(x.key)}',-1)">↑</button>
+  <button type="button" onclick="moveLayout('${esc(x.key)}',1)">↓</button>
+  <label class="layout-switch"><input type="checkbox" data-visible="${esc(x.key)}" ${x.visible!==false?"checked":""}> Tampil</label>
+ </div>`).join("");
+}
+let currentLayoutConfig=null;
+async function layout(){
+ const {data,error}=await sb.from("layout_settings").select("*").eq("id",1).single();
+ if(error)throw error;
+ currentLayoutConfig=normalizeLayoutConfig(data?.layout_config);
+ shell("Konfigurasi Layout",`<div class="layout-editor">
+  <div class="card">
+   <div class="section-head"><div><h3>Editor Tampilan Website</h3><p class="muted">Semua perubahan di sini langsung menjadi pengaturan tampilan situs publik.</p></div><button onclick="resetLayout()">Kembalikan Bawaan</button></div>
+   <div class="layout-section-list">${layoutSectionRows(currentLayoutConfig)}</div>
+  </div>
+  <div class="card form">
+   <h3>Ukuran Desktop</h3>
+   <div class="form-grid-2">
+    <label>Lebar maksimum (px)<input id="lWidth" type="number" min="1000" max="1800" value="${currentLayoutConfig.desktop.containerWidth}"></label>
+    <label>Kolom isi utama<select id="lCols"><option value="1" ${currentLayoutConfig.desktop.contentColumns==1?"selected":""}>1 kolom</option><option value="2" ${currentLayoutConfig.desktop.contentColumns==2?"selected":""}>2 kolom + sidebar</option></select></label>
+    <label>Lebar sidebar (px)<input id="lSidebar" type="number" min="240" max="500" value="${currentLayoutConfig.desktop.sidebarWidth}"></label>
+    <label>Jarak kolom (px)<input id="lGap" type="number" min="8" max="60" value="${currentLayoutConfig.desktop.gap}"></label>
+    <label>Jarak antar bagian (px)<input id="lSectionGap" type="number" min="8" max="60" value="${currentLayoutConfig.desktop.sectionGap}"></label>
+   </div>
+  </div>
+  <div class="card form">
+   <h3>Ukuran & Gaya</h3>
+   <div class="form-grid-2">
+    <label>Tinggi hero (px)<input id="lHero" type="number" min="380" max="800" value="${currentLayoutConfig.style.heroHeight}"></label>
+    <label>Kolom galeri<select id="lGallery"><option value="2" ${currentLayoutConfig.style.galleryColumns==2?"selected":""}>2</option><option value="3" ${currentLayoutConfig.style.galleryColumns==3?"selected":""}>3</option><option value="4" ${currentLayoutConfig.style.galleryColumns==4?"selected":""}>4</option><option value="5" ${currentLayoutConfig.style.galleryColumns==5?"selected":""}>5</option><option value="6" ${currentLayoutConfig.style.galleryColumns==6?"selected":""}>6</option></select></label>
+    <label>Bulat sudut kartu (px)<input id="lRadius" type="number" min="0" max="40" value="${currentLayoutConfig.style.cardRadius}"></label>
+    <label>Rasio foto<select id="lRatio"><option value="16/10" ${currentLayoutConfig.style.imageRatio==="16/10"?"selected":""}>16:10</option><option value="16/9" ${currentLayoutConfig.style.imageRatio==="16/9"?"selected":""}>16:9</option><option value="4/3" ${currentLayoutConfig.style.imageRatio==="4/3"?"selected":""}>4:3</option><option value="1/1" ${currentLayoutConfig.style.imageRatio==="1/1"?"selected":""}>1:1</option></select></label>
+   </div>
+   <h3>Mobile</h3>
+   <div class="form-grid-2">
+    <label>Padding layar (px)<input id="lMobilePad" type="number" min="8" max="32" value="${currentLayoutConfig.mobile.containerPadding}"></label>
+    <label>Jarak antar bagian (px)<input id="lMobileGap" type="number" min="8" max="32" value="${currentLayoutConfig.mobile.gap}"></label>
+   </div>
+   <div class="actions"><button class="primary" onclick="saveLayout()">Simpan Semua Layout</button></div>
+  </div>
+ </div>`);
+}
+function moveLayout(key,dir){
+ if(!currentLayoutConfig)return;
+ const a=[...currentLayoutConfig.sections].sort((x,y)=>(x.order||0)-(y.order||0));
+ const i=a.findIndex(x=>x.key===key),j=i+dir;
+ if(i<0||j<0||j>=a.length)return;
+ [a[i],a[j]]=[a[j],a[i]];
+ a.forEach((x,n)=>x.order=(n+1)*10);
+ currentLayoutConfig.sections=a;
+ document.querySelector(".layout-section-list").innerHTML=layoutSectionRows(currentLayoutConfig);
+}
+function collectLayout(){
+ const cfg=JSON.parse(JSON.stringify(currentLayoutConfig||DEFAULT_LAYOUT));
+ cfg.sections.forEach(x=>{const el=document.querySelector('[data-visible="'+x.key+'"]');if(el)x.visible=el.checked;});
+ cfg.desktop.containerWidth=Math.max(1000,Math.min(1800,Number(lWidth.value)||1500));
+ cfg.desktop.contentColumns=Number(lCols.value)||2;
+ cfg.desktop.sidebarWidth=Math.max(240,Math.min(500,Number(lSidebar.value)||320));
+ cfg.desktop.gap=Math.max(8,Math.min(60,Number(lGap.value)||24));
+ cfg.desktop.sectionGap=Math.max(8,Math.min(60,Number(lSectionGap.value)||20));
+ cfg.style.heroHeight=Math.max(380,Math.min(800,Number(lHero.value)||560));
+ cfg.style.galleryColumns=Math.max(2,Math.min(6,Number(lGallery.value)||4));
+ cfg.style.cardRadius=Math.max(0,Math.min(40,Number(lRadius.value)||18));
+ cfg.style.imageRatio=lRatio.value||"16/10";
+ cfg.mobile.containerPadding=Math.max(8,Math.min(32,Number(lMobilePad.value)||16));
+ cfg.mobile.gap=Math.max(8,Math.min(32,Number(lMobileGap.value)||14));
+ return cfg;
+}
+async function saveLayout(){
+ try{
+  const cfg=collectLayout();
+  const r=await sb.from("layout_settings").update({desktop_first:lDesk?.checked??true,show_qris:cfg.sections.find(x=>x.key==="donasi")?.visible!==false,show_memory_verse:cfg.sections.some(x=>x.key==="renungan"&&x.visible!==false),show_devotional:cfg.sections.some(x=>x.key==="renungan"&&x.visible!==false),layout_config:cfg,updated_at:new Date().toISOString()}).eq("id",1);
+  if(r.error)throw r.error;
+  currentLayoutConfig=cfg; alert("✓ Semua pengaturan layout tersimpan dan akan diterapkan di website.");
+ }catch(e){alert("Gagal menyimpan layout: "+(e?.message||e))}
+}
+async function resetLayout(){
+ currentLayoutConfig=JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+ document.querySelector(".layout-section-list").innerHTML=layoutSectionRows(currentLayoutConfig);
+ lWidth.value=1500;lCols.value=2;lSidebar.value=320;lGap.value=24;lSectionGap.value=20;lHero.value=560;lGallery.value=4;lRadius.value=18;lRatio.value="16/10";lMobilePad.value=16;lMobileGap.value=14;
+ alert("Layout bawaan dimuat. Tekan “Simpan Semua Layout” untuk menerapkannya.");
+}
+
 async function jadwal(){const a=await rows("worship_schedules");shell("Jadwal Ibadah",`<div class="card"><div class="section-head"><div><h3>Jadwal Ibadah</h3><p class="muted">Jam dapat diedit langsung.</p></div><button class="primary" onclick="scheduleForm()">+ Tambah</button></div><div class="list">${a.map(x=>`<div class="row"><div><strong>${esc(x.title)}</strong><br><span>${esc(x.day_label)} • ${esc(x.time_label||"Jam belum diatur")} • ${esc(x.description||"")}</span></div><button onclick='scheduleForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Edit</button><button class="danger" onclick="remove('worship_schedules',${x.id},jadwal)">Hapus</button></div>`).join("")}</div></div>`)}
 function scheduleForm(x=null){x=x||{};shell(x.id?"Edit Jadwal":"Tambah Jadwal",`<div class="card form"><label>Nama<input id="sTitle" value="${esc(x.title)}"></label><label>Hari<input id="sDay" value="${esc(x.day_label)}"></label><label>Jam<input id="sTime" value="${esc(x.time_label||"")}"></label><label>Keterangan<input id="sDesc" value="${esc(x.description||"")}"></label><label class="check"><input id="sActive" type="checkbox" ${x.active!==false?"checked":""}> Aktif</label><div class="actions"><button class="primary" onclick='saveSchedule(${x.id||"null"})'>Simpan</button><button onclick="jadwal()">Batal</button></div></div>`)}
 async function saveSchedule(id){const o={title:sTitle.value.trim(),day_label:sDay.value.trim(),time_label:sTime.value.trim(),description:sDesc.value.trim(),active:sActive.checked,updated_at:new Date().toISOString()};if(!o.title||!o.day_label)return alert("Nama dan hari wajib diisi.");try{await saveRow("worship_schedules",id,o);jadwal()}catch(e){alert(e.message)}}
