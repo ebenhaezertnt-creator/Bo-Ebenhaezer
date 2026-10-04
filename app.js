@@ -127,7 +127,7 @@ async function media(){
   ]);
   const staticHtml=a.map(x=>`<div class="media-card">
    <div class="media-preview"><img src="${esc(x.image_url||x.fallback_data||"")} alt="${esc(x.title)}"></div>
-   <div class="media-info"><strong>${esc(x.title)}</strong><span>${esc(x.description||x.slot_key)}</span></div>
+   <div class="media-info"><strong>${esc(x.title)}</strong><textarea id="mediaDesc_${x.id}" rows="3" placeholder="Deskripsi gambar...">${esc(x.description||"")}</textarea><button type="button" onclick="saveMediaDescription(${x.id})">Simpan deskripsi</button></div>
    <input id="mediaFile_${x.id}" type="file" accept="image/*" hidden onchange="replaceMedia(${x.id})">
    <button class="primary" type="button" onclick="document.getElementById('mediaFile_${x.id}').click()">Ganti</button>
    ${x.image_url?'<button type="button" onclick="resetMedia('+x.id+')">Kembali bawaan</button>':""}
@@ -156,6 +156,17 @@ async function media(){
   </div>`);
  }catch(e){shell("Media Website",`<div class="card"><h3>Gagal memuat media</h3><p>${esc(e.message)}</p></div>`)}
 }
+async function saveMediaDescription(id){
+ try{
+  const el=$("mediaDesc_"+id);
+  const description=el?.value?.trim()||"";
+  const r=await sb.from("media_assets").update({description,updated_at:new Date().toISOString()}).eq("id",id);
+  if(r.error)throw r.error;
+  alert("✓ Deskripsi berhasil disimpan.");
+  media();
+ }catch(e){alert("Gagal menyimpan deskripsi: "+(e?.message||e))}
+}
+
 async function replaceMedia(id){
  const input=$("mediaFile_"+id),file=input?.files?.[0]; if(!file)return;
  if(!file.type.startsWith("image/"))return alert("File harus berupa gambar.");
