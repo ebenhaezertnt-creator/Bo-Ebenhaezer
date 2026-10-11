@@ -235,8 +235,9 @@ async function media(){
    rows("ministries"),
    rows("photos")
   ]);
-  const staticHtml=a.map(x=>`<div class="media-card">
-   <div class="media-preview"><img src="${esc(x.image_url||x.fallback_data||"")}" alt="${esc(x.title)}"></div>
+  const visibleAssets=a.filter(x=>x.image_url||x.fallback_data);
+  const staticHtml=visibleAssets.map(x=>`<div class="media-card">
+   <div class="media-preview"><img src="${esc(x.image_url||x.fallback_data||"")}" alt="${esc(x.title)}" onerror="this.closest('.media-preview').innerHTML='<div class=&quot;empty-media&quot;>Gambar tidak tersedia</div>'"></div>
    <div class="media-info"><strong>${esc(x.title)}</strong><textarea id="mediaDesc_${x.id}" rows="3" placeholder="Deskripsi gambar...">${esc(x.description||"")}</textarea><button type="button" onclick="saveMediaDescription(${x.id})">Simpan deskripsi</button></div>
    <input id="mediaFile_${x.id}" type="file" accept="image/*" hidden onchange="replaceMedia(${x.id})">
    <div class="actions">
@@ -245,6 +246,7 @@ async function media(){
     <button class="danger" type="button" onclick="deleteMediaImage(${x.id})">Hapus gambar</button>
    </div>
   </div>`).join("");
+  const staticEmpty=visibleAssets.length?"":'<div class="empty-media">Belum ada gambar tetap yang terdaftar. Gunakan “Tambah Foto Website” untuk menambahkan gambar baru.</div>';
   const bannerHtml=b.filter(x=>x.image_url).map(x=>`<div class="media-card">
    <div class="media-preview"><img src="${esc(x.image_url)}" alt="${esc(x.title)}"></div>
    <div class="media-info"><strong>${esc(x.title)}</strong><span>Banner / ${esc(x.kind)}</span></div>
@@ -261,8 +263,8 @@ async function media(){
    <div class="actions"><button class="primary" onclick='photoForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Ganti</button><button class="danger" onclick="deleteMediaRecord('photos',${x.id})">Hapus gambar</button></div>
   </div>`).join("");
   shell("Media Website",`<div class="media-page">
-   <div class="card"><div class="section-head"><div><h3>Semua Gambar Website</h3><p class="muted">Semua gambar website dapat diganti atau dihapus dari sini.</p></div></div>
-   <div class="media-grid">${staticHtml}</div></div>
+   <div class="card"><div class="section-head"><div><h3>Semua Gambar Website</h3><p class="muted">Gambar yang tidak tersedia disembunyikan. Gambar baru bisa ditambahkan dan dikelola dari sini.</p></div><button class="primary" type="button" onclick="photoForm()">+ Tambah Foto Website</button></div>
+   <div class="media-grid">${staticHtml}</div>${staticEmpty}</div>
    ${bannerHtml?'<div class="card"><h3>Banner & QRIS Aktif</h3><div class="media-grid">'+bannerHtml+"</div></div>":""}
    ${minHtml?'<div class="card"><h3>Foto Ministri</h3><div class="media-grid">'+minHtml+"</div></div>":""}
    ${photoHtml?'<div class="card"><h3>Dokumentasi Foto</h3><div class="media-grid">'+photoHtml+"</div></div>":""}
@@ -272,9 +274,9 @@ async function media(){
 async function deleteMediaImage(id){
  if(!confirm("Hapus gambar ini dari website? Gambar akan dikembalikan ke bawaan website."))return;
  try{
-  const r=await sb.from("media_assets").update({image_url:null,updated_at:new Date().toISOString()}).eq("id",id);
+  const r=await sb.from("media_assets").update({image_url:null,fallback_data:null,updated_at:new Date().toISOString()}).eq("id",id);
   if(r.error)throw r.error;
-  alert("✓ Gambar berhasil dihapus.");
+  alert("✓ Gambar dihapus dari daftar Back Office. Jika gambar berasal dari cache browser, muat ulang website.");
   media();
  }catch(e){alert("Gagal menghapus gambar: "+(e?.message||e))}
 }
