@@ -195,7 +195,48 @@ async function ministri(){const a=await rows("ministries");shell("Ministri",`<di
 function minForm(x=null){x=x||{};shell("Ministri",`<div class="card form"><label>Nama<input id="mName" value="${esc(x.name)}"></label><label>Jabatan<input id="mTitle" value="${esc(x.title||"")}"></label><label>Foto<input id="mFile" type="file" accept="image/*"><div class="upload-line"><button type="button" onclick="uploadImage('mFile','mPhoto','ministri')">⬆ Upload Foto</button><span class="muted">JPG, PNG atau WebP</span></div><input id="mPhoto" value="${esc(x.photo_url||"")}" placeholder="URL foto (terisi otomatis setelah upload)"></label><label>Bio<textarea id="mBio" rows="5">${esc(x.bio||"")}</textarea></label><label>Facebook<input id="mFb" value="${esc(x.facebook_url||"")}"></label><label>Instagram<input id="mIg" value="${esc(x.instagram_url||"")}"></label><label class="check"><input id="mActive" type="checkbox" ${x.active!==false?"checked":""}> Aktif</label><div class="actions"><button class="primary" onclick='saveMin(${x.id||"null"})'>Simpan</button><button onclick="ministri()">Batal</button></div></div>`)}
 async function saveMin(id){try{await saveRow("ministries",id,{name:mName.value.trim(),title:mTitle.value.trim(),photo_url:mPhoto.value.trim(),bio:mBio.value.trim(),facebook_url:mFb.value.trim(),instagram_url:mIg.value.trim(),active:mActive.checked,updated_at:new Date().toISOString()});ministri()}catch(e){alert(e.message)}}
 async function banner(){const a=await rows("banners");shell("Banner & QRIS",`<div class="card"><div class="section-head"><h3>Banner & QRIS</h3><button class="primary" onclick="banForm()">+ Tambah</button></div><div class="list">${a.map(x=>`<div class="row"><div><strong>${esc(x.title)}</strong><br><span>${esc(x.kind)} • ${esc(x.image_url)}</span></div><button onclick='banForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Edit</button><button class="danger" onclick="remove('banners',${x.id},banner)">Hapus</button></div>`).join("")}</div></div>`)}
-async function slideshow(){await banner();}
+async function slideshow(){
+ const a=(await rows("banners")).filter(x=>x.kind==="slideshow");
+ shell("Slideshow Website",`<div class="card">
+  <div class="section-head"><div><h3>Kelola Slideshow Beranda</h3><p class="muted">Tambah, ubah judul, ganti foto, aktifkan/nonaktifkan, atau hapus foto yang berganti di halaman depan website.</p></div><button class="primary" type="button" onclick="slideForm()">+ Tambah Slide</button></div>
+  <div class="media-grid">${a.map(x=>`<div class="media-card">
+   <div class="media-preview">${x.image_url?`<img src="${esc(x.image_url)}" alt="${esc(x.title)}" onerror="this.closest('.media-preview').innerHTML='<div class=&quot;empty-media&quot;>Gambar tidak tersedia</div>'">`:'<div class="empty-media">Belum ada foto</div>'}</div>
+   <div class="media-info"><strong>${esc(x.title||"Slide tanpa judul")}</strong><span>${x.active!==false?"Aktif":"Nonaktif"} • Slideshow Beranda</span></div>
+   <div class="actions"><button class="primary" type="button" onclick='slideForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Edit / Ganti Foto</button><button class="danger" type="button" onclick="remove('banners',${x.id},slideshow)">Hapus</button></div>
+  </div>`).join("")}</div>
+  ${a.length?"":'<div class="empty-media">Belum ada slide. Tekan “Tambah Slide” untuk menambahkan foto ke slideshow beranda.</div>'}
+ </div>`);
+}
+function slideForm(x=null){
+ x=x||{};
+ shell(x.id?"Edit Slide Slideshow":"Tambah Slide Slideshow",`<div class="card form">
+  <h3>${x.id?"Edit Foto Slideshow":"Tambah Foto Slideshow"}</h3>
+  <label>Judul / Keterangan<input id="slTitle" value="${esc(x.title||"")}" placeholder="Contoh: Ibadah Minggu"></label>
+  <label>Foto Slide<input id="slFile" type="file" accept="image/*"><div class="upload-line"><button type="button" onclick="uploadImage('slFile','slUrl','slideshow')">⬆ Upload Foto</button><span class="muted">JPG, PNG atau WebP, maksimal 8 MB</span></div><input id="slUrl" value="${esc(x.image_url||"")}" placeholder="URL foto (terisi setelah upload)"></label>
+  ${x.image_url?`<div class="media-preview" style="max-width:420px;margin:12px 0"><img src="${esc(x.image_url)}" alt="Pratinjau slide"></div>`:""}
+  <label class="check"><input id="slActive" type="checkbox" ${x.active!==false?"checked":""}> Tampilkan di slideshow website</label>
+  <div class="actions"><button class="primary" type="button" onclick='saveSlide(${x.id||"null"})'>Simpan Slide</button><button type="button" onclick="slideshow()">Batal</button></div>
+ </div>`);
+}
+async function saveSlide(id){
+ try{
+  const file=$("slFile")?.files?.[0]; let imageUrl=$("slUrl").value.trim();
+  if(file){
+   if(!file.type.startsWith("image/"))throw new Error("File harus berupa gambar.");
+   if(file.size>8*1024*1024)throw new Error("Ukuran maksimal 8 MB.");
+   const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+   const path="slideshow/"+Date.now()+"-"+crypto.randomUUID()+"."+ext;
+   const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error("Sesi admin sudah berakhir. Silakan login kembali.");
+   const up=await sb.storage.from("site-media").upload(path,file,{cacheControl:"31536000",upsert:false,contentType:file.type});
+   if(up.error)throw up.error;
+   imageUrl=sb.storage.from("site-media").getPublicUrl(path).data.publicUrl;
+  }
+  if(!imageUrl)throw new Error("Pilih atau upload foto terlebih dahulu.");
+  await saveRow("banners",id,{title:$("slTitle").value.trim()||"Slideshow Beranda",image_url:imageUrl,kind:"slideshow",active:$("slActive").checked,updated_at:new Date().toISOString()});
+  alert("✓ Slide berhasil disimpan.");
+  slideshow();
+ }catch(e){alert("Gagal menyimpan slide: "+(e?.message||e))}
+}
 
 function banForm(x=null){x=x||{};shell("Banner",`<div class="card form"><label>Judul<input id="bTitle" value="${esc(x.title)}"></label><label>Gambar<input id="bFile" type="file" accept="image/*"><div class="upload-line"><button type="button" onclick="uploadImage('bFile','bUrl','banner')">⬆ Upload Gambar</button><span class="muted">Banner atau QRIS</span></div><input id="bUrl" value="${esc(x.image_url||"")}" placeholder="URL gambar (terisi otomatis setelah upload)"></label><label>Jenis<select id="bKind"><option value="banner" ${x.kind!=="qris"&&x.kind!=="slideshow"?"selected":""}>Banner</option><option value="qris" ${x.kind==="qris"?"selected":""}>QRIS</option><option value="slideshow" ${x.kind==="slideshow"?"selected":""}>Slideshow Beranda</option></select></label><label class="check"><input id="bActive" type="checkbox" ${x.active!==false?"checked":""}> Aktif</label><div class="actions"><button class="primary" onclick='saveBan(${x.id||"null"})'>Simpan</button><button onclick="banner()">Batal</button></div></div>`)}
 async function saveBan(id){try{await saveRow("banners",id,{title:bTitle.value.trim(),image_url:bUrl.value.trim(),kind:bKind.value,active:bActive.checked,updated_at:new Date().toISOString()});banner()}catch(e){alert(e.message)}}
@@ -328,5 +369,5 @@ async function remove(table,id,back){if(!confirm("Hapus data ini?"))return;try{a
 async function pengaturan(){shell("Pengaturan",`<div class="card"><h3>Pengaturan Back Office</h3><p>Backend: Supabase</p><p>Frontend: GitHub Pages</p><button class="danger" onclick="logout()">Keluar</button></div>`)}
 async function logout(){await sb.auth.signOut();location.reload()}
 async function show(id){const it=items.find(x=>x[0]===id);$("pageTitle").textContent=it?.[1]||"Back Office";document.querySelectorAll(".navitem").forEach(b=>b.classList.toggle("active",b.dataset.id===id));try{if(id==="dashboard")await dashboard();else if(id==="gereja")await gereja();else if(id==="layout")await layout();else if(id==="banner")await banner();else if(id==="slideshow")await slideshow();else if(id==="media")await media();else if(id==="jadwal")await jadwal();else if(id==="ministri")await ministri();else if(id==="dokumentasi")await photos();else if(id==="arsip")await photos("Jemaat");else if(id==="kontak")await kontak();else if(id==="harian")await harian();else await pengaturan()}catch(e){shell("Error",`<div class="card"><h3>Gagal memuat data</h3><p>${esc(e.message)}</p></div>`)}}
-const navIcons={"dashboard":"⌂","gereja":"◈","layout":"▦","banner":"◉","media":"▧","jadwal":"◷","ministri":"♙","dokumentasi":"▣","arsip":"▤","kontak":"☎","harian":"✦","pengaturan":"⚙"};const nav=$("nav");nav.innerHTML=items.map((x,i)=>`<button class="navitem ${i===0?"active":""}" data-id="${x[0]}"><span class="navicon">${navIcons[x[0]]||"•"}</span><span>${x[1]}</span></button>`).join("");nav.querySelectorAll("button").forEach(b=>b.onclick=()=>show(b.dataset.id));
+const navIcons={"dashboard":"⌂","gereja":"◈","layout":"▦","banner":"◉","slideshow":"▣","media":"▧","jadwal":"◷","ministri":"♙","dokumentasi":"▣","arsip":"▤","kontak":"☎","harian":"✦","pengaturan":"⚙"};const nav=$("nav");nav.innerHTML=items.map((x,i)=>`<button class="navitem ${i===0?"active":""}" data-id="${x[0]}"><span class="navicon">${navIcons[x[0]]||"•"}</span><span>${x[1]}</span></button>`).join("");nav.querySelectorAll("button").forEach(b=>b.onclick=()=>show(b.dataset.id));
 init();
