@@ -219,9 +219,13 @@ function slideForm(x=null){
  </div>`);
 }
 async function saveSlide(id){
+ const button=document.querySelector('#content button[onclick^="saveSlide("]');
  try{
-  const file=$("slFile")?.files?.[0]; let imageUrl=$("slUrl").value.trim();
-  if(file){
+  if(button){button.disabled=true;button.textContent="Menyimpan…"}
+  const file=$("slFile")?.files?.[0]; const urlInput=$("slUrl"); let imageUrl=urlInput.value.trim();
+  const uploadedMarker=file?[file.name,file.size,file.lastModified].join(":"):"";
+  const alreadyUploaded=!!file&&urlInput.dataset.uploadedFile===uploadedMarker&&!!imageUrl;
+  if(file&&!alreadyUploaded){
    if(!file.type.startsWith("image/"))throw new Error("File harus berupa gambar.");
    if(file.size>8*1024*1024)throw new Error("Ukuran maksimal 8 MB.");
    const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
@@ -230,19 +234,26 @@ async function saveSlide(id){
    const up=await sb.storage.from("site-media").upload(path,file,{cacheControl:"31536000",upsert:false,contentType:file.type});
    if(up.error)throw up.error;
    imageUrl=sb.storage.from("site-media").getPublicUrl(path).data.publicUrl;
+   urlInput.value=imageUrl;urlInput.dataset.uploadedFile=uploadedMarker;
   }
-  if(!imageUrl)throw new Error("Pilih atau upload foto terlebih dahulu.");
-  await saveRow("banners",id,{title:$("slTitle").value.trim()||"Slideshow Beranda",image_url:imageUrl,kind:"slideshow",active:$("slActive").checked,updated_at:new Date().toISOString()});
+  if(!imageUrl)throw new Error("Pilih foto lalu tekan Upload Foto, atau masukkan URL foto.");
+  const payload={title:$("slTitle").value.trim()||"Slideshow Beranda",image_url:imageUrl,kind:"slideshow",active:$("slActive").checked,updated_at:new Date().toISOString()};
+  const result=id?await sb.from("banners").update(payload).eq("id",id).select("id").maybeSingle():await sb.from("banners").insert(payload).select("id").single();
+  if(result.error)throw result.error;
+  if(!result.data)throw new Error("Data tidak tersimpan. Periksa akses admin dan coba login kembali.");
   alert("✓ Slide berhasil disimpan.");
-  slideshow();
- }catch(e){alert("Gagal menyimpan slide: "+(e?.message||e))}
+  await slideshow();
+ }catch(e){
+  console.error("Gagal menyimpan slideshow:",e);
+  alert("Gagal menyimpan slide: "+(e?.message||e?.details||e?.hint||String(e)));
+ }finally{if(button){button.disabled=false;button.textContent="Simpan Slide"}}
 }
 
 function banForm(x=null){x=x||{};shell("Banner",`<div class="card form"><label>Judul<input id="bTitle" value="${esc(x.title)}"></label><label>Gambar<input id="bFile" type="file" accept="image/*"><div class="upload-line"><button type="button" onclick="uploadImage('bFile','bUrl','banner')">⬆ Upload Gambar</button><span class="muted">Banner atau QRIS</span></div><input id="bUrl" value="${esc(x.image_url||"")}" placeholder="URL gambar (terisi otomatis setelah upload)"></label><label>Jenis<select id="bKind"><option value="banner" ${x.kind!=="qris"&&x.kind!=="slideshow"?"selected":""}>Banner</option><option value="qris" ${x.kind==="qris"?"selected":""}>QRIS</option><option value="slideshow" ${x.kind==="slideshow"?"selected":""}>Slideshow Beranda</option></select></label><label class="check"><input id="bActive" type="checkbox" ${x.active!==false?"checked":""}> Aktif</label><div class="actions"><button class="primary" onclick='saveBan(${x.id||"null"})'>Simpan</button><button onclick="banner()">Batal</button></div></div>`)}
 async function saveBan(id){try{await saveRow("banners",id,{title:bTitle.value.trim(),image_url:bUrl.value.trim(),kind:bKind.value,active:bActive.checked,updated_at:new Date().toISOString()});banner()}catch(e){alert(e.message)}}
 async function photos(cat){const a=await rows("photos");const filtered=cat?a.filter(x=>x.category===cat):a;if(cat){shell("Arsip Foto Jemaat",`<div class="card"><div class="section-head"><h3>Arsip Foto Jemaat</h3><button class="primary" onclick="photoForm()">+ Tambah Foto</button></div><div class="media-grid">${filtered.map(x=>`<div class="media-card"><div class="media-preview"><img src="${esc(x.image_url||"")}" alt=""></div><div class="actions"><button onclick='photoForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Edit</button><button class="danger" onclick="remove('photos',${x.id},()=>photos("Jemaat"))">Hapus</button></div></div>`).join("")}</div></div>`);return;}shell("Dokumentasi Foto",`<div class="card"><div class="section-head"><h3>Dokumentasi Foto</h3><button class="primary" onclick="photoForm()">+ Tambah Foto</button></div><div class="list">${filtered.map(x=>`<div class="row"><div><strong>${esc(x.title)}</strong><br><span>${esc(x.category)} • ${esc(x.image_url)}</span></div><button onclick='photoForm(${JSON.stringify(x).replace(/'/g,"&#39;")})'>Edit</button><button class="danger" onclick="remove('photos',${x.id},()=>photos(null))">Hapus</button></div>`).join("")}</div></div>`)}
 function photoForm(x=null){x=x||{};shell("Foto",`<div class="card form"><label>Judul<input id="pTitle" value="${esc(x.title)}"></label><label>Kategori<input id="pCat" value="${esc(x.category||"Dokumentasi")}"></label><label>Foto<input id="pFile" type="file" accept="image/*"><div class="upload-line"><button type="button" onclick="uploadImage('pFile','pUrl','foto')">⬆ Upload Foto</button><span class="muted">Pilih foto dari perangkat</span></div><input id="pUrl" value="${esc(x.image_url||"")}" placeholder="URL foto (terisi otomatis setelah upload)"></label><label class="check"><input id="pActive" type="checkbox" ${x.active!==false?"checked":""}> Aktif</label><div class="actions"><button class="primary" onclick='savePhoto(${x.id||"null"})'>Simpan</button><button onclick="photos()">Batal</button></div></div>`)}
-async function uploadImage(fileId,urlId,folder){const input=$(fileId);const file=input?.files?.[0];if(!file)return alert("Pilih foto terlebih dahulu.");if(!file.type.startsWith("image/"))return alert("File harus berupa gambar.");if(file.size>8*1024*1024)return alert("Ukuran maksimal 8 MB.");const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";const path=(folder||"media")+"/"+Date.now()+"-"+crypto.randomUUID()+"."+ext;const btn=input.closest(".form")?.querySelector(".upload-line button");if(btn){btn.disabled=true;btn.textContent="Mengunggah ke Supabase…"}try{const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error("Sesi admin sudah berakhir. Silakan login kembali.");const r=await sb.storage.from("site-media").upload(path,file,{cacheControl:"31536000",upsert:false,contentType:file.type});if(r.error)throw r.error;const g=sb.storage.from("site-media").getPublicUrl(path);if(!g?.data?.publicUrl)throw new Error("URL foto tidak berhasil dibuat.");$(urlId).value=g.data.publicUrl;$(urlId).dispatchEvent(new Event("input",{bubbles:true}));alert("✓ Foto berhasil di-upload. URL sudah terisi. Sekarang tekan SIMPAN.");}catch(e){alert("Upload gagal: "+(e?.message||e));}finally{if(btn){btn.disabled=false;btn.textContent="⬆ Upload Foto"}}}
+async function uploadImage(fileId,urlId,folder){const input=$(fileId);const file=input?.files?.[0];if(!file)return alert("Pilih foto terlebih dahulu.");if(!file.type.startsWith("image/"))return alert("File harus berupa gambar.");if(file.size>8*1024*1024)return alert("Ukuran maksimal 8 MB.");const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";const path=(folder||"media")+"/"+Date.now()+"-"+crypto.randomUUID()+"."+ext;const btn=input.closest(".form")?.querySelector(".upload-line button");if(btn){btn.disabled=true;btn.textContent="Mengunggah ke Supabase…"}try{const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error("Sesi admin sudah berakhir. Silakan login kembali.");const r=await sb.storage.from("site-media").upload(path,file,{cacheControl:"31536000",upsert:false,contentType:file.type});if(r.error)throw r.error;const g=sb.storage.from("site-media").getPublicUrl(path);if(!g?.data?.publicUrl)throw new Error("URL foto tidak berhasil dibuat.");$(urlId).value=g.data.publicUrl;$(urlId).dataset.uploadedFile=[file.name,file.size,file.lastModified].join(":");$(urlId).dispatchEvent(new Event("input",{bubbles:true}));alert("✓ Foto berhasil di-upload. URL sudah terisi. Sekarang tekan SIMPAN.");}catch(e){alert("Upload gagal: "+(e?.message||e));}finally{if(btn){btn.disabled=false;btn.textContent="⬆ Upload Foto"}}}
 async function savePhoto(id){
  try{
   const file=pFile?.files?.[0]; let imageUrl=pUrl.value.trim();
